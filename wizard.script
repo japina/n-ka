@@ -1,4 +1,5 @@
 board <- 1;
+libs_path <- _T("~/Documents/n-ka/libs");
 function BeginWizard()
 {
 	// this is the text that will appear in the start (intro) page
@@ -7,24 +8,36 @@ function BeginWizard()
 				"This wizard will guide you to create a new N-ka application.\n\n" +
 				"Please click \"Next\" to proceed.");
 
-	//local ARM_boards = _T("N-ka;");
-	// intro
 	Wizard.AddInfoPage(_T("ConsoleIntro"), intro_msg);
+	if (PLATFORM == PLATFORM_MSW)
+	{
+		libs_path = "%HOMEPATH%/n-ka/libs";
+	}
+	if (PLATFORM == PLATFORM_GTK)
+	{
+		libs_path = "~/n-ka/libs";
+	}	
+	if (PLATFORM == PLATFORM_MAC)
+	{
+		libs_path = "~/Documents/n-ka/libs";
+	}
 	// select project name and path
 	Wizard.AddProjectPathPage();
 	// select compiler and configurations
 	Wizard.AddCompilerPage(_T(""), _T("*arm*"), true, false);
+	Wizard.AddGenericSingleChoiceListPage(_T("Nka_board"), _T("Please select the configuration you want to use."), _T("stm32f030;stm32f318"), board);
 
-	Wizard.AddGenericSingleChoiceListPage(_T("N-ka_board"), _T("Please select the configuration you want to use."), _T("stm32f030;stm32f318"), board);
 }
 //
 //------------------------------------------------------------------------------
 //
-
-function GetFilesDir()
+function OnLeave_Nka_board(fwd)
 {
-
-	return _T("arm") + wxFILE_SEP_PATH + _T("files") + wxFILE_SEP_PATH + _T("stm32f3xx");
+	if (fwd)
+	{
+		board = Wizard.GetListboxSelection(_T("GenericChoiceList"));
+	}
+	return true;
 }
 //
 //------------------------------------------------------------------------------
@@ -34,17 +47,12 @@ function SetupProject(project)
 	local target;
 	local i;
 
-	// NOTE: Major compiler system drawback here.
-	// Until it is redesigned to allow easier compiler settings,
-	// we have to check the compiler's ID and set options for different compilers...
-	// We make things easier for scripts, by providing a few predefined functions
-	// to setup common settings like "debug", "warnings", etc.
-	// These functions are located in <templates_path>/common_functions.script.
-	// If you add other commonly used functions or bug-fix anything in that file,
-	// please share it with us :)
 
-	// enable compiler warnings (project-wide)
-	WarningsOn(project, Wizard.GetCompilerID());
+	// path to libraries
+	libs_path = IO.SelectDirectory(_T("Select path to libraries"), _T(libs_path), true);	
+
+// enable compiler warnings (project-wide)
+   	WarningsOn(project, Wizard.GetCompilerID());
 	DebugSymbolsOn(project, Wizard.GetCompilerID());
 	OptimizationsOn(project, Wizard.GetCompilerID());
 
@@ -55,7 +63,7 @@ function SetupProject(project)
 	project.AddCompilerOption(_T("-fno-common"));
 	project.AddLinkerOption(_T("-Wl,-Map,map.txt"));
 
-	SetupDerivative(derivative,project);
+	SetupCompile(project);
 
 	// We setup the targets using SetupTarget() which is conveniently called by Code::Blocks
 	// if we register this wizard as wizTarget type :)
@@ -96,8 +104,8 @@ function SetupTarget(target,is_debug)
 
 	target.SetObjectOutput(target.GetTitle());
 
-	target.AddCommandsAfterBuild(_T("arm-none-eabi-objcopy ") + target.GetTitle() + wxFILE_SEP_PATH + projectname + _T(".elf"));
-	target.AddCommandsAfterBuild(_T("arm-none-eabi-objcopy ") + target.GetTitle() + wxFILE_SEP_PATH + projectname + _T(".bin"));	
+	target.AddCommandsAfterBuild(_T("arm-none-eabi-objcopy -O ihex ") + target.GetTitle() + wxFILE_SEP_PATH + projectname + _T(".elf ") + target.GetTitle() + wxFILE_SEP_PATH + projectname + _T(".hex"));
+	target.AddCommandsAfterBuild(_T("arm-none-eabi-objcopy -O binary ") + target.GetTitle() + wxFILE_SEP_PATH + projectname + _T(".elf ") + target.GetTitle() + wxFILE_SEP_PATH + projectname + _T(".bin"));
 
 	if (is_debug)
 	{
@@ -109,24 +117,28 @@ function SetupTarget(target,is_debug)
 }
 
 
-function SetupDerivative(derivative,project)
+function SetupCompile(project)
 {
 
-	if (board==0)
+	switch(board)
 	{
-		project.AddCompilerOption(_T("-T/Users/bostjan/peskovnik/arm/stm32f0/libs/STM32F031C6_FLASH.ld"));
-		project.AddCompilerOption(_T("-mcpu=cortex-m0"));
-		project.AddCompilerOption(_T("-mfloat-abi=soft"));
-	} else {
-		project.AddCompilerOption(_T("-T/Users/bostjan/peskovnik/arm/stm32f0/libs/STM32F302R8_FLASH.ld"));			project.AddCompilerOption(_T("-mcpu=cortex-m4"));
-		project.AddCompilerOption(_T("-mfloat-abi=hard"));
-		project.AddCompilerOption(_T("-mfpu=fpv4-sp-d16"));		
-}
+		case 0:
+				project.AddCompilerOption(_T("-T" + libs_path + "/stm32f031c6_flash.ld"));
+				project.AddCompilerOption(_T("-mcpu=cortex-m0"));
+				project.AddCompilerOption(_T("-mfloat-abi=soft"));
+				project.AddLinkerOption(_T("-lstm32f0 -ltiming -lpins"));
+				break;
+		case 1:
+				project.AddCompilerOption(_T("-T" + libs_path + "/stm32f318_flash.ld"));
+				project.AddCompilerOption(_T("-mcpu=cortex-m4"));
+				project.AddCompilerOption(_T("-mfloat-abi=hard"));
+				project.AddCompilerOption(_T("-mfpu=fpv4-sp-d16"));
+				project.AddLinkerOption(_T("-lstm32f3 -ltiming -lpins"));		
+	}
 	project.AddCompilerOption(_T("-mlittle-endian"));
 	project.AddCompilerOption(_T("-mthumb"));
 	project.AddCompilerOption(_T("-mthumb-interwork"));
 
-	project.AddLinkerOption(_T("-L/Users/bostjan/peskovnik/arm/stm32f0/libs"));
+	project.AddLinkerOption(_T("-L" + libs_path));
 	project.AddLinkerOption(_T("--specs=nosys.specs"));	
-	project.AddLinkerOption(_T("-lstm32f0"));
 }
