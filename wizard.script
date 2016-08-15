@@ -14,18 +14,7 @@ function BeginWizard()
 				"Please click \"Next\" to proceed.");
 
 	Wizard.AddInfoPage(_T("ConsoleIntro"), intro_msg);
-	if (PLATFORM == PLATFORM_MSW)
-	{
-		libs_path = "%HOMEPATH%/n-ka/libs";
-	}
-	if (PLATFORM == PLATFORM_GTK)
-	{
-		libs_path = "~/n-ka/libs";
-	}	
-	if (PLATFORM == PLATFORM_MAC)
-	{
-		libs_path = "~/Documents/n-ka/libs";
-	}
+
 	// select project name and path
 	Wizard.AddProjectPathPage();
 	// select compiler and configurations
