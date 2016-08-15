@@ -1,5 +1,5 @@
 board <- 1;
-libs_path <- _T("~/Documents/n-ka/libs");
+libs_path <- _T("$(#libspath)");
 
 
 // armv6-m Cortex M0
@@ -31,6 +31,9 @@ function BeginWizard()
 	// select compiler and configurations
 	Wizard.AddCompilerPage(_T(""), _T("*arm*"), true, true);
 	Wizard.AddGenericSingleChoiceListPage(_T("Nka_board"), _T("Please select the configuration you want to use."), _T("stm32f030;stm32f318"), board);
+	// path to libraries
+	Wizard.AddGenericSelectPathPage(_T("WxPath"), _T("Select path to libraries"), _T("Path to libraries"), _T("$(#libspath)"));
+	libs_path = _T("$(#libspath)");
 
 }
 //
@@ -68,10 +71,6 @@ function SetupProject(project)
 	local target;
 	local file;
 	local i;
-
-
-	// path to libraries
-	libs_path = IO.SelectDirectory(_T("Select path to libraries"), _T(libs_path), true);	
 
 // enable compiler warnings (project-wide)
    	WarningsOn(project, Wizard.GetCompilerID());
