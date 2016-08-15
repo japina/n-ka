@@ -1,10 +1,15 @@
 board <- 1;
 libs_path <- _T("~/Documents/n-ka/libs");
+
+
+// armv6-m Cortex M0
+// armv7e-m Cortex M4
+
 function BeginWizard()
 {
 	// this is the text that will appear in the start (intro) page
 	local intro_msg = _T(	"Welcome to the new N-ka application wizard!\n" +
-	      		  	"It is heavily based on ARM application wizard!\n" +
+	      		  	"It is heavily based on other wizards (esp. console)!\n" +
 				"This wizard will guide you to create a new N-ka application.\n\n" +
 				"Please click \"Next\" to proceed.");
 
@@ -24,7 +29,7 @@ function BeginWizard()
 	// select project name and path
 	Wizard.AddProjectPathPage();
 	// select compiler and configurations
-	Wizard.AddCompilerPage(_T(""), _T("*arm*"), true, false);
+	Wizard.AddCompilerPage(_T(""), _T("*arm*"), true, true);
 	Wizard.AddGenericSingleChoiceListPage(_T("Nka_board"), _T("Please select the configuration you want to use."), _T("stm32f030;stm32f318"), board);
 
 }
@@ -42,9 +47,26 @@ function OnLeave_Nka_board(fwd)
 //
 //------------------------------------------------------------------------------
 //
+
+// glede na board izberi kaj skopira
+function GetFilesDir()
+{
+    local result;
+
+    // depending on the source type setting, return the appropriate value.
+    if (board == 0) // C source file
+        result = _T("n-ka/33");
+    else // C++ source file
+        result = _T("tester/18");
+    return result;
+}
+//
+//------------------------------------------------------------------------------
+//
 function SetupProject(project)
 {
 	local target;
+	local file;
 	local i;
 
 
@@ -54,14 +76,11 @@ function SetupProject(project)
 // enable compiler warnings (project-wide)
    	WarningsOn(project, Wizard.GetCompilerID());
 	DebugSymbolsOn(project, Wizard.GetCompilerID());
-	OptimizationsOn(project, Wizard.GetCompilerID());
+	OptimizationsOn(project, Wizard.GetCompilerID()); 
 
 	// Add subdirectories for includes
 	project.AddIncludeDir(_T("src"));
 	project.AddIncludeDir(_T("h"));
-
-	project.AddCompilerOption(_T("-fno-common"));
-	project.AddLinkerOption(_T("-Wl,-Map,map.txt"));
 
 	SetupCompile(project);
 
@@ -69,22 +88,20 @@ function SetupProject(project)
 	// if we register this wizard as wizTarget type :)
 	// This means that this very wizard can be used both as wizProject *and* as wizTarget ;)
 
-	//configure default target
-	target = project.GetBuildTarget(_T("default"));
 
+	//configure Debug target
+	target = project.GetBuildTarget(_T("Debug"));
 	if (IsNull(target))
-		target = project.AddBuildTarget(_T("default"));
-
+		target = project.AddBuildTarget(_T("Debug"));
 	SetupTarget(target, true);
 
-	for (i = 0; i < project.GetFilesCount(); i++)
-	{
-		if ((project.GetFile(i).relativeFilename.Matches(_T("*S"))) || (project.GetFile(i).relativeFilename.Matches(_T("*s"))))
-		{
-			project.GetFile(i).compile = true;
-			project.GetFile(i).link = true;
-		}
-	}
+	//configure Release target
+	target = project.GetBuildTarget(_T("Release"));
+	if (IsNull(target))
+		target = project.AddBuildTarget(_T("Release"));
+	SetupTarget(target, false);
+
+
 	// all done!
 	return true;
 }
@@ -104,6 +121,17 @@ function SetupTarget(target,is_debug)
 
 	target.SetObjectOutput(target.GetTitle());
 
+	switch(board) {
+		case 0:
+			target.AddLinkLib(_T("stm32f0"));
+			break;
+		case 1:
+			target.AddLinkLib(_T("stm32f3"));
+	}
+	target.AddLinkLib(_T("pins"));
+	target.AddLinkLib(_T("timing"));
+	target.AddLinkLib(_T("tft"));
+
 	target.AddCommandsAfterBuild(_T("arm-none-eabi-objcopy -O ihex ") + target.GetTitle() + wxFILE_SEP_PATH + projectname + _T(".elf ") + target.GetTitle() + wxFILE_SEP_PATH + projectname + _T(".hex"));
 	target.AddCommandsAfterBuild(_T("arm-none-eabi-objcopy -O binary ") + target.GetTitle() + wxFILE_SEP_PATH + projectname + _T(".elf ") + target.GetTitle() + wxFILE_SEP_PATH + projectname + _T(".bin"));
 
@@ -112,7 +140,6 @@ function SetupTarget(target,is_debug)
 		// enable debugging symbols for this target
 		DebugSymbolsOn(target, Wizard.GetCompilerID());
 	}
-
 	return true;
 }
 
@@ -120,25 +147,14 @@ function SetupTarget(target,is_debug)
 function SetupCompile(project)
 {
 
-	switch(board)
-	{
-		case 0:
-				project.AddCompilerOption(_T("-T" + libs_path + "/stm32f031c6_flash.ld"));
-				project.AddCompilerOption(_T("-mcpu=cortex-m0"));
-				project.AddCompilerOption(_T("-mfloat-abi=soft"));
-				project.AddLinkerOption(_T("-lstm32f0 -ltiming -lpins"));
-				break;
-		case 1:
-				project.AddCompilerOption(_T("-T" + libs_path + "/stm32f318_flash.ld"));
-				project.AddCompilerOption(_T("-mcpu=cortex-m4"));
-				project.AddCompilerOption(_T("-mfloat-abi=hard"));
-				project.AddCompilerOption(_T("-mfpu=fpv4-sp-d16"));
-				project.AddLinkerOption(_T("-lstm32f3 -ltiming -lpins"));		
-	}
-	project.AddCompilerOption(_T("-mlittle-endian"));
-	project.AddCompilerOption(_T("-mthumb"));
-	project.AddCompilerOption(_T("-mthumb-interwork"));
 
-	project.AddLinkerOption(_T("-L" + libs_path));
-	project.AddLinkerOption(_T("--specs=nosys.specs"));	
+	switch(board) {
+		case 0:
+			project.AddCompilerOption(_T("-g -O2 -Wall -T" + libs_path + "/stm32f030c6_flash.ld --specs=nosys.specs -mlittle-endian -mthumb -mcpu=cortex-m0 -mthumb-interwork -mfloat-abi=soft -I" + libs_path + " -I" + libs_path + "/inc -I" + libs_path + "/inc/core -I" + libs_path + "/inc/peripherals"));
+			project.AddLinkerOption(_T("-T" + libs_path + "/stm32f030c6_flash.ld --specs=nosys.specs -mthumb -mcpu=cortex-m0"));
+			break;
+		case 1:
+			project.AddCompilerOption(_T("-g -O2 -Wall -T" + libs_path + "/stm32f318_flash.ld --specs=nosys.specs -mlittle-endian -mthumb -mcpu=cortex-m4 -mthumb-interwork -mfloat-abi=hard -mfpu=fpv4-sp-d16 -I" + libs_path + " -I" + libs_path + "/inc -I" + libs_path + "/inc/core -I" + libs_path + "/inc/peripherals"));
+			project.AddLinkerOption(_T("-T" + libs_path + "/stm32f030c6_flash.ld --specs=nosys.specs -mthumb -mcpu=cortex-m4x"));
+	}
 }
